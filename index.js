@@ -28,9 +28,11 @@ var customHeaderRequest = request.defaults({
     headers: { 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_3) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/79.0.3945.79 Safari/537.36' }
 })
 
-const reURL = 'http://ts.21cn.com/json/indexPcMorePost/order/ctime/pageNo/1';
+const reURL = 'http://ts.21cn.com/json/indexPcMorePost/order/ctime/pageNo/';
 const detailPageURL = 'http://ts.21cn.com/tousu/show/id/';
 const detailDataURL = 'http://ts.21cn.com/json/getPostContent/postKey/';
+
+let pageNo = 1;
 
 // 首页的数据可仅作为最新一条的id
 
@@ -40,81 +42,86 @@ const detailDataURL = 'http://ts.21cn.com/json/getPostContent/postKey/';
         headless: false
     });
 
-    customHeaderRequest(reURL, { json: true }, async (err, res, body) => {
-        if (err) { return console.log(err); }
-        const htmlJson = body.message;
-        write.sync('./html/pageNo1.html', htmlJson, { newline: true });
+    const times = Array.from({ length: 3 })
+    for (const time of times) {
 
-        const $ = cheerio.load(htmlJson);
-        const tagsEl = $('span[class=sharetag]');
-        const tagArr = tagsEl.map(function (i, el) {
-            return $(el).attr('tag');
-        }).get();
+        customHeaderRequest(reURL + pageNo, { json: true }, async (err, res, body) => {
+            if (err) { return console.log(err); }
+            const htmlJson = body.message;
+            write.sync('./html/pageNo1.html', htmlJson, { newline: true });
 
-        for (const tag of tagArr) {
-            const page = await browser.newPage();       //开启浏览器新窗口
-            await page.setViewport({            //配置窗口信息，具体配置的移步官方文档
-                width: 1920,
-                height: 1080
-            });
+            const $ = cheerio.load(htmlJson);
+            const tagsEl = $('span[class=sharetag]');
+            const tagArr = tagsEl.map(function (i, el) {
+                return $(el).attr('tag');
+            }).get();
 
-            await page.goto(detailPageURL + tag);         //当前窗口加载固定 url 地址页。url 需要以 https 开头
-            // const html = await page.content();   //这是返回出来的html代码
+            for (const tag of tagArr) {
+                const page = await browser.newPage();       //开启浏览器新窗口
+                await page.setViewport({            //配置窗口信息，具体配置的移步官方文档
+                    width: 1920,
+                    height: 1080
+                });
 
-            await sleep(1);
+                await page.goto(detailPageURL + tag);         //当前窗口加载固定 url 地址页。url 需要以 https 开头
+                // const html = await page.content();   //这是返回出来的html代码
 
-            customHeaderRequest({
-                uri: detailPageURL + tag,
-                headers: {
-                    'accept-language': 'es-ES,es;q=0.9,ru;q=0.8',
-                    'accept-encoding': 'br',
-                    'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9'
-                }
-            }, (err, res, body) => {
+                await sleep(5);
 
-                write.sync(`./html/${tag}.html`, body, { newline: true });
-
-                const $ = cheerio.load(body);
-                const postKeyValue = $('input#postKeyValue').attr('value');
-
-                customHeaderRequest(detailDataURL + postKeyValue, { json: true }, (err, res, body) => {
-                    console.log('%c 🥝 body: ', 'font-size:20px;background-color: #465975;color:#fff;', lodash.get(body, 'post'));
-                    const postData = lodash.get(body, 'post');
-                    if (!postData) {
-                        console.log('%c 🥤 postData: ', 'font-size:20px;background-color: #EA7E5C;color:#fff;', tag, postKeyValue, postData);
-                        return;
+                customHeaderRequest({
+                    uri: detailPageURL + tag,
+                    headers: {
+                        'accept-language': 'es-ES,es;q=0.9,ru;q=0.8',
+                        'accept-encoding': 'br',
+                        'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9'
                     }
-                    const {
-                        id,
-                        title,
-                        ctimeStr,
-                        merchantname,
-                        problemLabelList,
-                        shuqiu,
-                        topic,
-                    } = postData;
-                    worksheet.addRow({
-                        id,
-                        title,
-                        ctimeStr,
-                        merchantname,
-                        problemLabelListName: problemLabelList.map((label) => label.name).join(','),
-                        shuqiu,
-                        topic,
-                    });
-                    if (tag === tagArr[tagArr.length - 1]) {
-                        browser.close();      //关闭浏览器，对象实例销毁
+                }, (err, res, body) => {
+
+                    write.sync(`./html/${tag}.html`, body, { newline: true });
+
+                    const $ = cheerio.load(body);
+                    const postKeyValue = $('input#postKeyValue').attr('value');
+
+                    customHeaderRequest(detailDataURL + postKeyValue, { json: true }, (err, res, body) => {
+                        console.log('%c 🥝 body: ', 'font-size:20px;background-color: #465975;color:#fff;', lodash.get(body, 'post'));
+                        const postData = lodash.get(body, 'post');
+                        if (!postData) {
+                            console.log('%c 🥤 postData: ', 'font-size:20px;background-color: #EA7E5C;color:#fff;', tag, postKeyValue, postData);
+                            return;
+                        }
+                        const {
+                            id,
+                            title,
+                            ctimeStr,
+                            merchantname,
+                            problemLabelList,
+                            shuqiu,
+                            topic,
+                        } = postData;
+                        worksheet.addRow({
+                            id,
+                            title,
+                            ctimeStr,
+                            merchantname,
+                            problemLabelListName: problemLabelList.map((label) => label.name).join(','),
+                            shuqiu,
+                            topic,
+                        });
                         workbook.xlsx.writeFile(`./generated/${new Date(ctimeStr).toLocaleDateString()}.xlsx`)
                             .then(() => {
-                                // done
                                 console.log('csv ok');
                             });
-                        console.log('ok');
-                    }
+                        if (tag === tagArr[tagArr.length - 1]) {
+                            browser.close();      //关闭浏览器，对象实例销毁
+                            console.log('everything is ok');
+                        }
+                    })
                 })
-            })
-        }
+            }
 
-    });
+        });
+
+        pageNo += 1;
+    }
 
 })();
